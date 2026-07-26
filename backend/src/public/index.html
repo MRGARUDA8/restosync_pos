@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RestoSync Cloud POS - Modern Restaurant Management</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Auth Screen -->
+    <div id="loginScreen" class="screen auth-container">
+      <div class="auth-card glass-panel">
+        <div class="auth-header">
+          <span class="material-icons-outlined brand-icon">restaurant</span>
+          <h2>RestoSync POS</h2>
+          <p>Cloud-Based Restaurant POS & Inventory Engine</p>
+        </div>
+        <form id="loginForm">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="loginEmail" value="admin@restosync.com" required placeholder="admin@restosync.com">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" value="adminpassword" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-primary full-width">Sign In to Terminal</button>
+        </form>
+        <div class="auth-footer">
+          <p class="quick-credentials">Quick Login Demo: <b>admin@restosync.com</b> / <b>adminpassword</b></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Navigation Layout -->
+    <div id="mainLayout" class="main-layout hidden">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="material-icons-outlined">restaurant</span>
+          <span class="brand-name">RestoSync POS</span>
+        </div>
+        <nav class="nav-menu">
+          <button class="nav-item active" data-tab="dashboard"><span class="material-icons-outlined">dashboard</span> Dashboard</button>
+          <button class="nav-item" data-tab="pos"><span class="material-icons-outlined">point_of_sale</span> POS & Billing</button>
+          <button class="nav-item" data-tab="tables"><span class="material-icons-outlined">table_restaurant</span> Tables</button>
+          <button class="nav-item" data-tab="kitchen"><span class="material-icons-outlined">kitchen</span> Kitchen (KDS)</button>
+          <button class="nav-item" data-tab="inventory"><span class="material-icons-outlined">inventory_2</span> Inventory</button>
+          <button class="nav-item" data-tab="suppliers"><span class="material-icons-outlined">local_shipping</span> Suppliers</button>
+          <button class="nav-item" data-tab="customers"><span class="material-icons-outlined">people</span> Customers</button>
+          <button class="nav-item" data-tab="reports"><span class="material-icons-outlined">assessment</span> Reports</button>
+          <button class="nav-item" data-tab="settings"><span class="material-icons-outlined">settings</span> Settings</button>
+        </nav>
+        <div class="sidebar-user">
+          <div class="user-info">
+            <span class="user-name" id="navUserName">Admin User</span>
+            <span class="user-role" id="navUserRole">Admin</span>
+          </div>
+          <button id="logoutBtn" class="icon-btn" title="Logout"><span class="material-icons-outlined">logout</span></button>
+        </div>
+      </aside>
+
+      <!-- Main Content Container -->
+      <main class="content-area">
+        <!-- Top Status Bar -->
+        <header class="top-bar">
+          <div class="bar-title"><h2 id="currentTabTitle">Dashboard</h2></div>
+          <div class="bar-status">
+            <span class="status-indicator online"></span>
+            <span id="socketStatus">Realtime Socket Connected</span>
+            <span class="branch-badge">Branch: Downtown</span>
+          </div>
+        </header>
+
+        <!-- Dynamic Views -->
+        <div class="view-container">
+          <!-- View: Dashboard -->
+          <section id="dashboardView" class="tab-view active">
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-icon sales"><span class="material-icons-outlined">payments</span></div>
+                <div class="kpi-details">
+                  <span>Today's Sales</span>
+                  <h3 id="kpiSales">₹0.00</h3>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon orders"><span class="material-icons-outlined">receipt_long</span></div>
+                <div class="kpi-details">
+                  <span>Today's Orders</span>
+                  <h3 id="kpiOrders">0</h3>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon tables"><span class="material-icons-outlined">table_restaurant</span></div>
+                <div class="kpi-details">
+                  <span>Active Tables</span>
+                  <h3 id="kpiTables">0</h3>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-icon kots"><span class="material-icons-outlined">soup_kitchen</span></div>
+                <div class="kpi-details">
+                  <span>Pending KOTs</span>
+                  <h3 id="kpiPendingKots">0</h3>
+                </div>
+              </div>
+            </div>
+
+            <div class="dashboard-charts">
+              <div class="chart-card glass-panel">
+                <h4>Top Selling Products</h4>
+                <canvas id="topProductsChart"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <!-- View: POS Billing -->
+          <section id="posView" class="tab-view hidden">
+            <div class="pos-layout">
+              <!-- Left: Categories & Products -->
+              <div class="pos-catalog">
+                <div class="catalog-header">
+                  <div class="category-tabs" id="posCategoryTabs">
+                    <button class="cat-btn active" data-cat="all">All Items</button>
+                  </div>
+                </div>
+                <div class="product-grid" id="posProductGrid">
+                  <!-- Rendered via JS -->
+                </div>
+              </div>
+
+              <!-- Right: Active Bill & Cart -->
+              <div class="pos-cart glass-panel">
+                <div class="cart-header">
+                  <h3>Active Order</h3>
+                  <select id="cartOrderType" class="select-input">
+                    <option value="Dine In">Dine In</option>
+                    <option value="Takeaway">Takeaway</option>
+                  </select>
+                  <select id="cartTableSelect" class="select-input">
+                    <option value="T1">Table T1</option>
+                    <option value="T2">Table T2</option>
+                    <option value="T3">Table T3</option>
+                    <option value="T4">Table T4</option>
+                    <option value="T5">Table T5</option>
+                  </select>
+                </div>
+
+                <div class="cart-items-container" id="cartItemsList">
+                  <div class="empty-cart">No items added to order</div>
+                </div>
+
+                <div class="cart-summary">
+                  <div class="summary-line"><span>Sub Total</span><span id="cartSubTotal">₹0.00</span></div>
+                  <div class="summary-line"><span>GST (5%)</span><span id="cartGst">₹0.00</span></div>
+                  <div class="summary-line"><span>Discount</span><input type="number" id="cartDiscountInput" value="0" class="discount-input"></div>
+                  <div class="summary-line total-line"><span>Grand Total</span><span id="cartGrandTotal">₹0.00</span></div>
+                </div>
+
+                <div class="cart-actions">
+                  <button id="sendKotBtn" class="btn btn-warning"><span class="material-icons-outlined">soup_kitchen</span> Send KOT</button>
+                  <button id="payBillBtn" class="btn btn-success"><span class="material-icons-outlined">check_circle</span> Pay & Bill</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- View: Tables -->
+          <section id="tablesView" class="tab-view hidden">
+            <div class="tables-header">
+              <h3>Visual Floor Plan Layout</h3>
+              <div class="table-legend">
+                <span class="legend-item"><span class="dot available"></span> Available</span>
+                <span class="legend-item"><span class="dot occupied"></span> Occupied</span>
+                <span class="legend-item"><span class="dot reserved"></span> Reserved</span>
+              </div>
+            </div>
+            <div class="table-grid" id="tablesFloorGrid">
+              <!-- Rendered via JS -->
+            </div>
+          </section>
+
+          <!-- View: Kitchen Display (KDS) -->
+          <section id="kitchenView" class="tab-view hidden">
+            <div class="kds-header">
+              <h3>Live Kitchen Display System (KDS)</h3>
+            </div>
+            <div class="kds-grid" id="kdsGrid">
+              <!-- Rendered via JS -->
+            </div>
+          </section>
+
+          <!-- View: Inventory -->
+          <section id="inventoryView" class="tab-view hidden">
+            <div class="inventory-container">
+              <div class="inventory-header">
+                <h3>Raw Material Ingredients & Stock</h3>
+                <button id="addStockBtn" class="btn btn-primary">+ Add Stock In</button>
+              </div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Ingredient</th>
+                    <th>Current Stock</th>
+                    <th>Unit</th>
+                    <th>Threshold</th>
+                    <th>Cost/Unit</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                  <!-- Rendered via JS -->
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- View: Suppliers -->
+          <section id="suppliersView" class="tab-view hidden">
+            <div class="suppliers-container">
+              <h3>Suppliers Directory</h3>
+              <table class="data-table">
+                <thead>
+                  <tr><th>Supplier Name</th><th>Contact Person</th><th>Phone</th><th>GSTIN</th></tr>
+                </thead>
+                <tbody id="suppliersTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- View: Customers -->
+          <section id="customersView" class="tab-view hidden">
+            <div class="customers-container">
+              <h3>Customer Database & Loyalty</h3>
+              <table class="data-table">
+                <thead>
+                  <tr><th>Name</th><th>Phone</th><th>Email</th><th>Loyalty Points</th></tr>
+                </thead>
+                <tbody id="customersTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- View: Reports -->
+          <section id="reportsView" class="tab-view hidden">
+            <div class="reports-container">
+              <div class="report-filters">
+                <button class="btn btn-secondary export-excel-btn" id="exportExcelBtn"><span class="material-icons-outlined">file_download</span> Export Excel</button>
+              </div>
+              <table class="data-table">
+                <thead>
+                  <tr><th>Bill #</th><th>Order #</th><th>Table</th><th>Payment</th><th>Subtotal</th><th>GST</th><th>Grand Total</th><th>Date</th></tr>
+                </thead>
+                <tbody id="reportsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- View: Settings -->
+          <section id="settingsView" class="tab-view hidden">
+            <div class="settings-card glass-panel">
+              <h3>System & Printer Settings</h3>
+              <form id="settingsForm">
+                <div class="form-group"><label>Restaurant Name</label><input type="text" id="setRestoName" value="RestoSync Gourmet Diner"></div>
+                <div class="form-group"><label>Default GST Rate (%)</label><input type="number" id="setGstRate" value="5"></div>
+                <div class="form-group"><label>Thermal Printer IP</label><input type="text" id="setPrinterIp" value="192.168.1.200"></div>
+                <button type="submit" class="btn btn-primary">Save Configuration</button>
+              </form>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

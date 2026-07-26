@@ -1,0 +1,35 @@
+{
+  "name": "restosync-pos-backend",
+  "version": "1.0.0",
+  "description": "Cloud RestoSync POS - Production Ready Restaurant POS, Billing, KOT & Inventory System",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "seed": "node src/utils/seed.js",
+    "test": "node tests/test_runner.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.5.1",
+    "pdfkit": "^0.15.0",
+    "socket.io": "^4.7.5"
+  },
+  "keywords": [
+    "pos",
+    "restaurant",
+    "kot",
+    "billing",
+    "inventory",
+    "socketio",
+    "express"
+  ],
+  "author": "Antigravity Team",
+  "license": "MIT"
+}
