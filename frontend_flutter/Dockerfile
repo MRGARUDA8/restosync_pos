@@ -1,4 +1,13 @@
-﻿FROM cirrusci/flutter:3.19.0 AS build
+﻿FROM ubuntu:22.04 AS build
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y git curl unzip xz-utils zip libglu1-mesa
+
+RUN git clone https://github.com/flutter/flutter.git -b stable /sdks/flutter
+ENV PATH="/sdks/flutter/bin:${PATH}"
+
+RUN flutter config --enable-web
+
 WORKDIR /app
 COPY frontend_flutter/ .
 RUN flutter pub get
