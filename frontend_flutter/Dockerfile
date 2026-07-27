@@ -1,4 +1,4 @@
-﻿FROM plugfox/flutter:3.19.0 AS build
+﻿FROM ghcr.io/cirrusci/flutter:3.19.0 AS build
 WORKDIR /app
 COPY frontend_flutter/ .
 RUN flutter pub get
