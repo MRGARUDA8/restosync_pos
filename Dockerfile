@@ -1,4 +1,4 @@
-﻿FROM ghcr.io/cirrusci/flutter:3.19.0 AS build
+﻿FROM mobiledevops/flutter:3.19.0 AS build
 
 WORKDIR /app
 COPY frontend_flutter/ .
