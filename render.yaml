@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: hacky-pizza-backend
+    env: node
+    plan: free
+    branch: main
+    root: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
