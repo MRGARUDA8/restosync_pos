@@ -30,6 +30,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', name: 'Hacky Pizza POS Backend' });
 });
 
+// Basic landing page for GET / to avoid "Cannot GET /" in browser.
+// This provides a friendly message and links to health and sync endpoints.
+app.get('/', (req, res) => {
+  res.type('html').send(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Hacky Pizza POS Backend</title>
+        <style>body{font-family:Arial,Helvetica,sans-serif;background:#fafafa;color:#222;padding:40px}a{color:#0077cc}</style>
+      </head>
+      <body>
+        <h1>Hacky Pizza POS — Backend</h1>
+        <p>This service exposes a small REST API for cloud sync and a Socket.IO real-time endpoint for KDS.</p>
+        <ul>
+          <li><a href="/health">/health</a> — healthcheck</li>
+          <li><a href="/sync/status">/sync/status</a> — sync status</li>
+          <li>Socket.IO endpoint available on the same origin</li>
+        </ul>
+        <p>If you see authentication errors in logs, check your MONGO_URI environment variable and MongoDB Atlas user settings.</p>
+      </body>
+    </html>
+  `);
+});
+
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
   socket.on('order_update', (payload) => {
