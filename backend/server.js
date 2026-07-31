@@ -67,16 +67,26 @@ io.on('connection', (socket) => {
 });
 
 // MongoDB connection (MongoDB Atlas recommended). Provide via MONGO_URI env var.
-const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/hacky_pizza_pos';
+const mongoUri = (process.env.MONGO_URI || '').trim();
 
-async function connectWithRetry(uri) {
+if (!mongoUri) {
+  console.error('ERROR: MONGO_URI environment variable is required. Set it in Render secrets or your local .env file.');
+  process.exit(1);
+}
+
+if (mongoUri.includes('<') || mongoUri.includes('>')) {
+  console.error('ERROR: MONGO_URI must not include angle brackets. Use the exact Atlas URI with username and password.');
+  process.exit(1);
+}
+
+async function connectWithRetry(uri, retries = 0) {
   try {
-    // Mongoose v6+ no longer needs useNewUrlParser etc but keep robust handling
     await mongoose.connect(uri);
     console.log('Connected to MongoDB');
   } catch (err) {
-    console.error('MongoDB connection error, retrying in 5s...', err);
-    setTimeout(() => connectWithRetry(uri), 5000);
+    const delay = Math.min(5000 * (retries + 1), 30000);
+    console.error(`MongoDB connection error (attempt ${retries + 1}), retrying in ${delay / 1000}s...`, err.message || err);
+    setTimeout(() => connectWithRetry(uri, retries + 1), delay);
   }
 }
 
