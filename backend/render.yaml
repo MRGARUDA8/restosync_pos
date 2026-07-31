@@ -1,0 +1,23 @@
+# Render service manifest (template)
+# IMPORTANT: Do NOT put secrets in this file. Set secret values in the Render dashboard under Environment.
+# This file is a template you can use for 'Infrastructure as Code' deployments if desired.
+
+services:
+  - type: web
+    name: hacky-pizza-pos-backend
+    env: node
+    region: oregon # change as needed
+    plan: free # change according to your needs
+    buildCommand: ""
+    startCommand: "npm start"
+    disk: 1024
+    concurrency:
+      type: "connections"
+      hard_limit: 500
+    envVars:
+      - key: MONGO_URI
+        value: "" # Set this as a secret in Render dashboard (do not commit here)
+      - key: FRONTEND_URL
+        value: ""
+      - key: NODE_ENV
+        value: "production"
