@@ -35,25 +35,39 @@ class ResponsiveScaffold extends StatelessWidget {
       final isLarge = constraints.maxWidth > 1000;
       return Scaffold(
         appBar: AppBar(
-          title: Text(title),
-          actions: actions ?? [
-            IconButton(onPressed: () {}, icon: const Icon(Icons.sync)),
-            IconButton(onPressed: () {}, icon: const Icon(Icons.print)),
-          ],
-        ),
-        drawer: isLarge ? null : Drawer(child: _buildSidebar(context)),
-        body: Row(
-          children: [
-            if (isLarge)
-              Container(
-                width: 280,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: _buildSidebar(context),
-              ),
-            Expanded(child: body),
-          ],
-        ),
-      );
+            backgroundColor: const Color(0xFF6D28D9),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_arrow_down, size: 24),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: actions ?? [
+              IconButton(onPressed: () {}, icon: const Icon(Icons.person)),
+              IconButton(onPressed: () {}, icon: const Icon(Icons.phone)),
+            ],
+          ),
+          drawer: isLarge ? null : Drawer(child: _buildSidebar(context)),
+          body: Row(
+            children: [
+              if (isLarge)
+                Container(
+                  width: 280,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: _buildSidebar(context),
+                ),
+              Expanded(child: body),
+            ],
+          ),
+          bottomNavigationBar: isLarge ? null : _buildBottomNavigationBar(context),
+        );
     });
   }
 
@@ -83,6 +97,28 @@ class ResponsiveScaffold extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBottomNavigationBar(BuildContext context) {
+    const bottomItems = [
+      BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: 'Reports'),
+      BottomNavigationBarItem(icon: Icon(Icons.today), label: 'Today'),
+      BottomNavigationBarItem(icon: Icon(Icons.point_of_sale), label: 'Counter'),
+      BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Items'),
+      BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'More'),
+    ];
+
+    const mappedIndices = [6, 0, 1, 2, 9];
+    final selectedIndex = mappedIndices.indexOf(currentIndex);
+
+    return BottomNavigationBar(
+      currentIndex: selectedIndex >= 0 ? selectedIndex : 0,
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: const Color(0xFF6D28D9),
+      unselectedItemColor: Colors.grey,
+      onTap: (index) => onDestinationSelected(mappedIndices[index]),
+      items: bottomItems,
     );
   }
 
