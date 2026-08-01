@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/settings_provider.dart';
 import '../services/cloud_sync_service.dart';
+import 'receipt_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -68,9 +69,8 @@ class SettingsScreen extends StatelessWidget {
                         ElevatedButton(
                           onPressed: () async {
                             final success = await CloudSyncService.instance.forceSync();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(success ? 'Sync complete' : 'Sync failed')));
-                            }
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(success ? 'Sync complete' : 'Sync failed')));
                           },
                           child: const Text('Force Sync'),
                         ),
@@ -78,6 +78,27 @@ class SettingsScreen extends StatelessWidget {
                         ElevatedButton(
                           onPressed: () {},
                           child: const Text('Backup Data'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Card(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Receipt Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        const Text('Customize receipt header, footer, toggles and templates.'),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReceiptSettingsScreen()));
+                          },
+                          child: const Text('Open Receipt Settings'),
                         ),
                       ],
                     ),

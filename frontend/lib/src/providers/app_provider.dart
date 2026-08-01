@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppProvider extends ChangeNotifier {
-  int _selectedIndex = 0;
+  int _selectedIndex = 1;
   ThemeMode _themeMode = ThemeMode.dark;
 
   int get selectedIndex => _selectedIndex;

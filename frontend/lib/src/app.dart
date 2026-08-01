@@ -12,7 +12,10 @@ import 'providers/order_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/report_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/receipt_settings_provider.dart';
+import 'screens/receipt_settings_screen.dart';
 import 'providers/invoice_provider.dart';
+import 'providers/category_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/expenses_screen.dart';
 import 'screens/inventory_screen.dart';
@@ -39,10 +42,12 @@ class HackyPizzaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
+        ChangeNotifierProvider(create: (_) => CategoryProvider()),
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
         ChangeNotifierProvider(create: (_) => InvoiceProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => ReceiptSettingsProvider()),
       ],
       child: Consumer<AppProvider>(builder: (context, appProvider, child) {
         return MaterialApp(
@@ -155,8 +160,21 @@ class _AppShellState extends State<AppShell> {
       );
     }
 
+    const titles = [
+      'Dashboard',
+      'POS Billing',
+      'Pizza & Menu Management',
+      'Orders & KDS',
+      'Inventory Management',
+      'Expenses',
+      'Sales Reports',
+      'Customers',
+      'Staff & Roles',
+      'Settings',
+    ];
+
     return ResponsiveScaffold(
-      title: 'Hacky Pizza TOW...',
+      title: titles[appProvider.selectedIndex],
       currentIndex: appProvider.selectedIndex,
       onDestinationSelected: (index) {
         appProvider.selectedIndex = index;
@@ -171,6 +189,16 @@ class _AppShellState extends State<AppShell> {
           onPressed: () {},
           icon: const Icon(Icons.call),
           tooltip: 'Support',
+        ),
+        PopupMenuButton<String>(
+          onSelected: (v) {
+            if (v == 'receipt_settings') {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReceiptSettingsScreen()));
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: 'receipt_settings', child: Text('Receipt Settings')),
+          ],
         ),
       ],
       body: screens[appProvider.selectedIndex],

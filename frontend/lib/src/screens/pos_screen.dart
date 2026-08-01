@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import '../providers/invoice_provider.dart';
 
-import '../models/invoice.dart';
+import '../providers/product_provider.dart';
+import '../providers/order_provider.dart';
 import '../models/product.dart';
 import '../models/product_variant.dart';
-import '../providers/order_provider.dart';
-import '../providers/product_provider.dart';
-import '../providers/auth_provider.dart';
-import '../services/printer_service.dart';
 import '../utils/currency_formatter.dart';
+import 'package:provider/provider.dart';
 
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key});
@@ -18,13 +16,7 @@ class PosScreen extends StatefulWidget {
 }
 
 class _PosScreenState extends State<PosScreen> {
-  ProductVariant? _selectedVariant;
-  Product? _selectedProduct;
-  double _quantity = 1;
-  String _customerId = '';
-  String _deliveryAddress = '';
-  String _riderName = '';
-  double _discount = 0;
+  String? _selectedCategory;
 
   @override
   void initState() {
@@ -34,220 +26,212 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
-  void _addItemToCart(BuildContext context) {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    if (_selectedProduct != null && _selectedVariant != null) {
-      orderProvider.addToCart(_selectedProduct!, _selectedVariant!, _quantity);
-    }
-  }
-
-  Future<void> _checkout(OrderType orderType) async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    if (!authProvider.isLoggedIn) return;
-    final totalAmount = orderProvider.calculateGrandTotal(orderProvider.calculateTax(5), _discount);
-    final invoiceNumber = await orderProvider.createInvoice(
-      customerId: _customerId,
-      paymentMethod: PaymentMethod.cash,
-      orderType: orderType,
-      userId: authProvider.user!.id,
-      discount: _discount,
-      deliveryAddress: _deliveryAddress,
-      riderName: _riderName,
-    );
-    await PrinterService.instance.printInvoice(invoiceNumber, 'Paid: ${CurrencyFormatter.format(totalAmount)}');
+  Future<void> _showVariantSelector(BuildContext context, Product product) async {
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    await productProvider.loadVariants(product.id);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invoice $invoiceNumber created')));
+    final variants = productProvider.variants;
+    int count = 1;
+    ProductVariant? selected = variants.isNotEmpty ? variants.first : null;
+
+    await showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (ctx) {
+      return Padding(
+        padding: MediaQuery.of(ctx).viewInsets,
+        child: StatefulBuilder(builder: (c, setS) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                if (variants.isEmpty)
+                  Text('No sizes available. Adding as single item at ₹${product.sellingPrice.toStringAsFixed(0)}')
+                else
+                  Column(
+                    children: variants.map((v) => RadioListTile<ProductVariant>(
+                      value: v,
+                      groupValue: selected,
+                      title: Text('${v.sizeName} - ${CurrencyFormatter.format(v.price)}'),
+                      onChanged: (val) => setS(() => selected = val),
+                    )).toList(),
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    IconButton(onPressed: () => setS(() { if (count>1) count--; }), icon: const Icon(Icons.remove_circle)),
+                    Text(count.toString(), style: const TextStyle(fontSize: 18)),
+                    IconButton(onPressed: () => setS(() { count++; }), icon: const Icon(Icons.add_circle, color: Colors.green)),
+                    const Spacer(),
+                    ElevatedButton.icon(onPressed: () {
+                      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+                      final variantToAdd = selected ?? ProductVariant(id: '', productId: product.id, sizeName: 'Standard', price: product.sellingPrice, weightVolume: 0, isAvailable: true);
+                      orderProvider.addToCart(product, variantToAdd, count.toDouble());
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to cart')));
+                      Navigator.of(ctx).pop();
+                    }, icon: const Icon(Icons.add_shopping_cart), label: const Text('Add to Cart')),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final invoiceProvider = Provider.of<InvoiceProvider>(context);
     final productProvider = Provider.of<ProductProvider>(context);
-    final orderProvider = Provider.of<OrderProvider>(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(18),
+    final categories = ['All', ...productProvider.productCategories.map((pc) => pc['name'] as String)];
+    if (_selectedCategory == null && categories.isNotEmpty) {
+      _selectedCategory = 'All';
+    }
+
+    final filtered = productProvider.products.where((p) => _selectedCategory == 'All' || p.category == _selectedCategory).toList();
+
+    return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('POS Billing', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Select Product'),
-                        const SizedBox(height: 12),
-                        DropdownButton<Product>(
-                          isExpanded: true,
-                          value: _selectedProduct,
-                          hint: const Text('Choose product'),
-                          items: productProvider.products
-                              .map((product) => DropdownMenuItem(value: product, child: Text(product.name)))
-                              .toList(),
-                          onChanged: (product) {
-                            setState(() {
-                              _selectedProduct = product;
-                              _selectedVariant = null;
-                            });
-                            if (product != null) {
-                              productProvider.loadVariants(product.id);
-                            }
-                          },
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            color: const Color(0xFF6D28D9),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 52,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(255, 255, 255, 0.18),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        const SizedBox(height: 12),
-                        DropdownButton<ProductVariant>(
-                          isExpanded: true,
-                          value: _selectedVariant,
-                          hint: const Text('Choose size/variant'),
-                          items: productProvider.variants
-                              .map((variant) => DropdownMenuItem(value: variant, child: Text('${variant.sizeName} - ${CurrencyFormatter.format(variant.price)}')))
-                              .toList(),
-                          onChanged: (variant) {
-                            setState(() {
-                              _selectedVariant = variant;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Text('Quantity:'),
-                            const SizedBox(width: 12),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.search, color: Colors.white70),
+                            SizedBox(width: 12),
                             Expanded(
-                              child: Slider(
-                                min: 0.5,
-                                max: 10,
-                                divisions: 19,
-                                value: _quantity,
-                                label: _quantity.toStringAsFixed(1),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _quantity = value;
-                                  });
-                                },
+                              child: Text(
+                                'I want to sell...',
+                                style: TextStyle(color: Colors.white70, fontSize: 16),
                               ),
                             ),
-                            Text(_quantity.toStringAsFixed(1)),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.add_shopping_cart),
-                          label: const Text('Add to Cart'),
-                          onPressed: () => _addItemToCart(context),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      height: 52,
+                      width: 52,
+                      decoration: BoxDecoration(
+                        color: const Color.fromRGBO(255, 255, 255, 0.18),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                InkWell(
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Create new order'))),
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        const BoxShadow(
+                          color: Color(0x14000000),
+                          blurRadius: 16,
+                          offset: Offset(0, 8),
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 4,
-                child: Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(vertical: 30),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Cart', style: Theme.of(context).textTheme.headlineSmall),
-                        const SizedBox(height: 12),
-                        if (orderProvider.cartItems.isEmpty)
-                          const Text('Cart is empty, add items to start billing.')
-                        else
-                          ...orderProvider.cartItems.map((item) {
-                            return ListTile(
-                              title: Text('${item.product.name} (${item.variant.sizeName})'),
-                              subtitle: Text('${item.quantity} ${item.product.unitType} x ${CurrencyFormatter.format(item.variant.price)}'),
-                              trailing: Text(CurrencyFormatter.format(item.lineTotal)),
-                            );
-                          }),
-                        const Divider(),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Subtotal'),
-                            Text(CurrencyFormatter.format(orderProvider.subtotal)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Tax (5%)'),
-                            Text(CurrencyFormatter.format(orderProvider.calculateTax(5))),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Discount'),
-                            Text(CurrencyFormatter.format(_discount)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Grand Total', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(CurrencyFormatter.format(orderProvider.calculateGrandTotal(orderProvider.calculateTax(5), _discount)), style: const TextStyle(fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          decoration: const InputDecoration(labelText: 'Customer ID / Mobile', border: OutlineInputBorder()),
-                          onChanged: (value) => _customerId = value,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          decoration: const InputDecoration(labelText: 'Delivery Address', border: OutlineInputBorder()),
-                          onChanged: (value) => _deliveryAddress = value,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          decoration: const InputDecoration(labelText: 'Rider Name', border: OutlineInputBorder()),
-                          onChanged: (value) => _riderName = value,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: 'Flat Discount', border: OutlineInputBorder()),
-                          onChanged: (value) => _discount = double.tryParse(value) ?? 0,
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 12,
-                          children: [
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.shopping_bag),
-                              label: const Text('Take Away'),
-                              onPressed: () => _checkout(OrderType.takeAway),
-                            ),
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.delivery_dining),
-                              label: const Text('Delivery'),
-                              onPressed: () => _checkout(OrderType.delivery),
-                            ),
-                          ],
+                      children: const [
+                        Icon(Icons.add_circle, color: Color(0xFF22C55E), size: 46),
+                        SizedBox(height: 12),
+                        Text(
+                          'NEW ORDER',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Total Table Orders: ${invoiceProvider.invoices.length}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 18),
+          // Category tabs
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: categories.map((c) {
+                  final selected = _selectedCategory == c;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: ChoiceChip(
+                      label: Text(c),
+                      selected: selected,
+                      onSelected: (_) => setState(() => _selectedCategory = c),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Products list for quick billing
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text('Products', style: Theme.of(context).textTheme.titleLarge),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: productProvider.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: filtered.map((p) {
+                      return ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
+                        onPressed: () => _showVariantSelector(context, p),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Text(p.category, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );

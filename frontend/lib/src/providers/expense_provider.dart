@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/expense.dart';
 import '../services/local_database.dart';
+import '../services/sync_service.dart';
 
 class ExpenseProvider extends ChangeNotifier {
   final LocalDatabaseService _databaseService = LocalDatabaseService.instance;
@@ -40,5 +41,9 @@ class ExpenseProvider extends ChangeNotifier {
     );
     await _databaseService.insertExpense(expense);
     await loadExpenses();
+    // Trigger a background sync attempt
+    try {
+      await SyncService.instance.syncPending();
+    } catch (_) {}
   }
 }

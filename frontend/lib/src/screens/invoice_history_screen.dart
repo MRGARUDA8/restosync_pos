@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:printing/printing.dart';
 
 import '../models/invoice.dart';
 import '../providers/auth_provider.dart';
 import '../providers/invoice_provider.dart';
+import '../services/local_database.dart';
+import '../services/pdf_service.dart';
+import '../services/bluetooth_print_service.dart';
 
 class InvoiceHistoryScreen extends StatefulWidget {
   const InvoiceHistoryScreen({super.key});
@@ -17,10 +21,18 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  DateTime _from = DateTime.now();
+  DateTime _to = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    // default range: start of today to end of today
+    final now = DateTime.now();
+    _from = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    _to = DateTime(now.year, now.month, now.day, 23, 59, 59);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       Provider.of<InvoiceProvider>(context, listen: false).loadInvoices();
     });
   }
@@ -42,107 +54,211 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
     }).toList();
   }
 
-  Color _statusColor(InvoiceStatus status) {
-    switch (status) {
-      case InvoiceStatus.completed:
-        return Colors.greenAccent.shade400;
-      case InvoiceStatus.cancelled:
-        return Colors.redAccent.shade400;
-      case InvoiceStatus.refunded:
-        return Colors.orangeAccent.shade400;
-      case InvoiceStatus.pending:
-        return Colors.blueAccent.shade400;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final invoiceProvider = context.watch<InvoiceProvider>();
-    final invoices = _filteredInvoices(invoiceProvider.invoices);
+    // only show invoices within selected date range
+    final allInvoices = invoiceProvider.invoices;
+    final invoicesInRange = allInvoices.where((inv) => inv.timestamp.isAfter(_from.subtract(const Duration(seconds:1))) && inv.timestamp.isBefore(_to.add(const Duration(seconds:1)))).toList();
+    final invoices = _filteredInvoices(invoicesInRange);
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
-    final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
 
     return Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Invoice History', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (value) => setState(() {
-                    _searchQuery = value.trim();
-                  }),
-                  decoration: const InputDecoration(
-                    labelText: 'Search invoices by number, customer, payment or order type',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.search),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Receipts', style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 12),
+
+            // Date range selectors
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final d = await showDatePicker(context: context, initialDate: _from, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                      if (d != null) setState(() => _from = DateTime(d.year, d.month, d.day, 0, 0, 0));
+                    },
+                    child: Container(
+                      height: 64,
+                      decoration: BoxDecoration(color: const Color(0xFF6D28D9), borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('From', style: TextStyle(color: Colors.white70)),
+                          const SizedBox(height: 6),
+                          Text(DateFormat('dd MMM yyyy').format(_from), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh'),
-                onPressed: () => invoiceProvider.loadInvoices(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: invoiceProvider.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : invoices.isEmpty
-                    ? const Center(child: Text('No invoices found.'))
-                    : ListView.separated(
-                        itemCount: invoices.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final invoice = invoices[index];
-                          return Card(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                            elevation: 2,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              title: Text(invoice.invoiceNumber, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text(dateFormat.format(invoice.timestamp)),
-                                  const SizedBox(height: 4),
-                                  Text('${invoice.orderType.name.toUpperCase()} · ${invoice.paymentMethod.name.toUpperCase()}'),
-                                ],
-                              ),
-                              trailing: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(currencyFormat.format(invoice.grandTotal), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 8),
-                                  Chip(
-                                    label: Text(invoice.status.name.toUpperCase()),
-                                    backgroundColor: _statusColor(invoice.status),
-                                  ),
-                                ],
-                              ),
-                              onTap: () {
-                                Navigator.of(context).push(MaterialPageRoute(
-                                  builder: (_) => InvoiceDetailScreen(invoice: invoice),
-                                ));
-                              },
-                            ),
-                          );
-                        },
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final d = await showDatePicker(context: context, initialDate: _to, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                      if (d != null) setState(() => _to = DateTime(d.year, d.month, d.day, 23, 59, 59));
+                    },
+                    child: Container(
+                      height: 64,
+                      decoration: BoxDecoration(color: const Color(0xFF6D28D9), borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('To', style: TextStyle(color: Colors.white70)),
+                          const SizedBox(height: 6),
+                          Text(DateFormat('dd MMM yyyy').format(_to), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ],
                       ),
-          ),
-        ],
-      ),
-    );
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() {
+                      _searchQuery = value.trim();
+                    }),
+                    decoration: const InputDecoration(
+                      labelText: 'Search invoices by number, customer, payment or order type',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.filter_list),
+                  label: const Text('Filter'),
+                  onPressed: () => setState(() {}),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Expanded(
+              child: invoiceProvider.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : invoices.isEmpty
+                      ? const Center(child: Text('No receipts found for selected range.'))
+                      : ListView.separated(
+                          itemCount: invoices.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final invoice = invoices[index];
+                            return Card(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 1,
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                leading: CircleAvatar(backgroundColor: Colors.green.shade50, child: Icon(Icons.currency_rupee, color: Colors.green,)),
+
+                                title: Text(invoice.invoiceNumber, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Text('by ${invoice.paymentMethod.name.toUpperCase()}', style: const TextStyle(color: Colors.grey)),
+                                    const SizedBox(height: 6),
+                                    FutureBuilder<int>(
+                                      future: LocalDatabaseService.instance.countInvoiceItems(invoice.id),
+                                      builder: (context, snap) {
+                                        final count = snap.data ?? 0;
+                                        return Text('$count Items · ${DateFormat('dd MMM yyyy - hh:mm a').format(invoice.timestamp)}', style: const TextStyle(color: Colors.grey));
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                trailing: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(currencyFormat.format(invoice.grandTotal), style: const TextStyle(color: Color(0xFF6D28D9), fontWeight: FontWeight.bold, fontSize: 16)),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.print, size: 18, color: Colors.grey),
+                                          tooltip: 'Print/Export',
+                                          onPressed: () async {
+                                            final invoiceProvider = Provider.of<InvoiceProvider>(context, listen: false);
+                                            // load items then generate PDF and print
+                                            await invoiceProvider.loadInvoiceItems(invoice.id);
+                                            final items = invoiceProvider.invoiceItems;
+                                            final pdf = await PdfService.generateInvoicePdf(invoice, items);
+                                            // Use printing package to show print/share dialog
+                                            try {
+                                              await Printing.layoutPdf(onLayout: (_) => pdf);
+                                            } catch (e) {
+                                               if (!mounted) return;
+                                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to print invoice')));
+                                             }
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.print_disabled, size: 18, color: Colors.grey),
+                                          tooltip: 'Print to Bluetooth',
+                                          onPressed: () async {
+                                            final invoiceProvider = Provider.of<InvoiceProvider>(context, listen: false);
+                                            final authUserId = Provider.of<AuthProvider>(context, listen: false).user?.id ?? '';
+                                            await invoiceProvider.loadInvoiceItems(invoice.id);
+                                            final items = invoiceProvider.invoiceItems;
+                                            final success = await BluetoothPrintService.instance.printInvoiceThermal(invoice, items, paperWidth: 58);
+                                            await LocalDatabaseService.instance.logPrintAttempt(invoice.id, authUserId, success);
+                                            if (!success) {
+                                              // fallback to PDF
+                                              try {
+                                                final pdf = await PdfService.generateInvoicePdf(invoice, items);
+                                                await Printing.layoutPdf(onLayout: (_) => pdf);
+                                              } catch (_) {
+                                                if (!mounted) return;
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to print or export invoice')));
+                                              }
+                                            } else {
+                                              if (!mounted) return;
+                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sent to Bluetooth printer')));
+                                            }
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.open_in_new, size: 18, color: Color(0xFF6D28D9)),
+                                          tooltip: 'Open',
+                                          onPressed: () {
+                                            Navigator.of(context).push(MaterialPageRoute(
+                                              builder: (_) => InvoiceDetailScreen(invoice: invoice),
+                                            ));
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => InvoiceDetailScreen(invoice: invoice),
+                                  ));
+                                },
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      );
   }
 }
 
@@ -246,6 +362,53 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.invoice.invoiceNumber),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.print),
+            tooltip: 'Print / Export',
+            onPressed: () async {
+              final invoiceProvider = Provider.of<InvoiceProvider>(context, listen: false);
+              // ensure items loaded
+              await invoiceProvider.loadInvoiceItems(widget.invoice.id);
+              final items = invoiceProvider.invoiceItems;
+              try {
+                final pdf = await PdfService.generateInvoicePdf(widget.invoice, items);
+                await Printing.layoutPdf(onLayout: (_) => pdf);
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to print invoice')));
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.print_disabled),
+            tooltip: 'Print to Bluetooth',
+            onPressed: () async {
+              final invoiceProvider = Provider.of<InvoiceProvider>(context, listen: false);
+              final authUserId = Provider.of<AuthProvider>(context, listen: false).user?.id ?? '';
+              await invoiceProvider.loadInvoiceItems(widget.invoice.id);
+              final items = invoiceProvider.invoiceItems;
+
+              final success = await BluetoothPrintService.instance.printInvoiceThermal(widget.invoice, items, paperWidth: 58);
+              // log the result
+              await LocalDatabaseService.instance.logPrintAttempt(widget.invoice.id, authUserId, success);
+
+              if (!success) {
+                // fallback to PDF
+                try {
+                  final pdf = await PdfService.generateInvoicePdf(widget.invoice, items);
+                  await Printing.layoutPdf(onLayout: (_) => pdf);
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to print or export invoice')));
+                }
+              } else {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sent to Bluetooth printer')));
+              }
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(18),
