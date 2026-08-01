@@ -34,7 +34,7 @@ class ResponsiveScaffold extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       final isLarge = constraints.maxWidth > 1000;
       return Scaffold(
-        appBar: AppBar(
+          appBar: AppBar(
             backgroundColor: const Color(0xFF6D28D9),
             title: Row(
               children: [
@@ -49,10 +49,7 @@ class ResponsiveScaffold extends StatelessWidget {
                 ),
               ],
             ),
-            actions: actions ?? [
-              IconButton(onPressed: () {}, icon: const Icon(Icons.person)),
-              IconButton(onPressed: () {}, icon: const Icon(Icons.phone)),
-            ],
+            actions: actions,
           ),
           drawer: isLarge ? null : Drawer(child: _buildSidebar(context)),
           body: Row(
@@ -75,8 +72,15 @@ class ResponsiveScaffold extends StatelessWidget {
     return Column(
       children: [
         DrawerHeader(
-          child: Center(
-            child: Text('Hacky Pizza', style: Theme.of(context).textTheme.headlineSmall),
+          decoration: const BoxDecoration(color: Color(0xFF6D28D9)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text('Hacky Pizza TOW', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white)),
+              const SizedBox(height: 4),
+              Text('Take Away + Delivery', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70)),
+            ],
           ),
         ),
         Expanded(
@@ -85,7 +89,8 @@ class ResponsiveScaffold extends StatelessWidget {
             itemBuilder: (context, index) {
               return ListTile(
                 selected: index == currentIndex,
-                selectedColor: Theme.of(context).colorScheme.primary,
+                selectedColor: const Color(0xFF6D28D9),
+                iconColor: index == currentIndex ? const Color(0xFF6D28D9) : null,
                 leading: Icon(_menuIcon(index)),
                 title: Text(_menuItems[index]),
                 onTap: () {

@@ -156,16 +156,21 @@ class _AppShellState extends State<AppShell> {
     }
 
     return ResponsiveScaffold(
-      title: 'Hacky Pizza POS',
+      title: 'Hacky Pizza TOW...',
       currentIndex: appProvider.selectedIndex,
       onDestinationSelected: (index) {
         appProvider.selectedIndex = index;
       },
       actions: [
         IconButton(
-          onPressed: authProvider.logout,
-          icon: const Icon(Icons.logout),
-          tooltip: 'Logout',
+          onPressed: () {},
+          icon: const Icon(Icons.person_add),
+          tooltip: 'New customer',
+        ),
+        IconButton(
+          onPressed: () {},
+          icon: const Icon(Icons.call),
+          tooltip: 'Support',
         ),
       ],
       body: screens[appProvider.selectedIndex],
